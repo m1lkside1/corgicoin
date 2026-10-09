@@ -46,6 +46,9 @@ public final class Overlay {
 	private static long lastWantMs;
 	private static boolean hostPreparationPending = true;
 	private static boolean focusPending;
+	/** Focus retries: until Minecraft is really in front, for a limited time so Alt+Tab elsewhere wins. */
+	private static final long FOCUS_RETRY_MS = 250L, FOCUS_GIVE_UP_MS = 10_000L;
+	private static long focusSinceMs, nextFocusAttemptMs;
 	private static final GameState STATE = new GameState();
 
 	public static boolean active() {
@@ -105,9 +108,16 @@ public final class Overlay {
 	/** F8 in the host game (reported by the DLL): bring Minecraft back on top. */
 	public static void switchToMc(Minecraft mc) {
 		if (!hostMode) {
+			// Minecraft never handed control away, but Elden Ring has the keyboard anyway
+			// (focus lost at world entry or to a host dialog): F8 must still bring Steve back.
+			if (active && window != 0L) {
+				setFocusPending();
+				LOG.info("Control -> Minecraft (focus recovery)");
+			}
 			return;
 		}
 		hostMode = false;
+		setFocusPending();
 		hostPreparationPending = true;
 		if (GLFW.glfwGetWindowAttrib(window, GLFW.GLFW_ICONIFIED) == GLFW.GLFW_TRUE) {
 			GLFW.glfwRestoreWindow(window);
@@ -230,10 +240,22 @@ public final class Overlay {
 			WindowsOverlay.update(window, active && !hostMode, busy || FramePassthrough.activeInHost(),
 					link.hostProcessId());
 		}
-		if (active && focusPending && haveClientWorld && readyToFocus(mc, hostBusyNow) && !busy) {
+		if (focusPending && focusSinceMs != 0L && now - focusSinceMs > FOCUS_GIVE_UP_MS) {
+			focusPending = false;
+			LOG.warn("Could not bring Minecraft's window to the front; press F8 in Elden Ring to retry");
+		}
+		if (active && focusPending && haveClientWorld && readyToFocus(mc, hostBusyNow) && !busy
+				&& now >= nextFocusAttemptMs) {
 			// Show and focus only after ownership, geometry and opacity have been applied.
 			if (Platform.get() == Platform.WINDOWS) {
+				if (focusSinceMs == 0L) {
+					focusSinceMs = now; // count from the first try, not from loading
+				}
+				nextFocusAttemptMs = now + FOCUS_RETRY_MS;
 				focusPending = !WindowsOverlay.showAboveHost(window, link.hostProcessId());
+				if (!focusPending) {
+					LOG.info("Minecraft has the keyboard and mouse");
+				}
 			} else {
 				GLFW.glfwShowWindow(window);
 				GLFW.glfwFocusWindow(window);
@@ -250,9 +272,19 @@ public final class Overlay {
 						|| CameraSync.mode() != CameraSync.Mode.DRIVE_HOST || FramePassthrough.activeInHost());
 	}
 
+	private static void setFocusPending() {
+		focusPending = true;
+		focusSinceMs = 0L;
+		nextFocusAttemptMs = 0L;
+	}
+
 	private static void setActive(Minecraft mc, boolean on) {
 		active = on;
-		focusPending = on;
+		if (on) {
+			setFocusPending();
+		} else {
+			focusPending = false;
+		}
 		LOG.info("Overlay mode {}", on ? "ON" : "OFF");
 		if (on) {
 			TerrainManager.requestRecall();

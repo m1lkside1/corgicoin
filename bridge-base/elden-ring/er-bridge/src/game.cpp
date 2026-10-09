@@ -2260,6 +2260,10 @@ static void handle_switching() {
             GetForegroundWindow() == hwnd ? "ok" : "not yet");
         return;
     }
+    // Windows refuses SetForegroundWindow from a background process. While Elden Ring
+    // is in front, let Minecraft take focus itself (world entry, F8 return).
+    uint32_t mcPid = shm_header()->mcPid;
+    if (mcPid && GetForegroundWindow() == hwnd) AllowSetForegroundWindow(mcPid);
     if (GetForegroundWindow() == hwnd && down && !g_f8Down) {
         ErmcHeader* h = shm_header();
         h->mcSwitchReq = h->mcSwitchReq + 1;

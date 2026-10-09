@@ -89,7 +89,10 @@ public final class WindowsOverlay {
 		taskbarFullscreen = false;
 		updateTaskbar(window, true);
 		GLFW.glfwFocusWindow(window);
-		return true;
+		User32.INSTANCE.SetForegroundWindow(hwnd);
+		// Windows may refuse focus to a background process without saying so; only
+		// report success once keyboard and mouse really reach Minecraft's window.
+		return hwnd.equals(User32.INSTANCE.GetForegroundWindow());
 	}
 
 	/** Use the Windows cursor theme, independently of the nearly transparent input framebuffer. */

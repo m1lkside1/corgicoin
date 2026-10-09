@@ -1,0 +1,34 @@
+{
+  "sheet": "systems",
+  "about": "Focus handoff between Elden Ring and Minecraft's invisible input window. Source of truth for the remix's change; code is built from these rows.",
+  "columns": ["id", "side", "file", "trigger", "behavior", "limit", "verified"],
+  "rows": [
+    {
+      "id": "host_grants_foreground",
+      "side": "er-bridge (native, Elden Ring)",
+      "file": "bridge-base/elden-ring/er-bridge/src/game.cpp:handle_switching",
+      "trigger": "every bridge tick while Elden Ring is the foreground window and mcPid is known",
+      "behavior": "AllowSetForegroundWindow(mcPid), so Minecraft's SetForegroundWindow is not refused by Windows",
+      "limit": "only Minecraft's own process id, only while Elden Ring is foreground",
+      "verified": "compiles with mingw-w64; in-game: needs player test"
+    },
+    {
+      "id": "focus_until_foreground",
+      "side": "mc-bridge (Fabric, Minecraft)",
+      "file": "bridge-base/elden-ring/mc-bridge/src/client/java/dev/ermc/bridge/client/WindowsOverlay.java:showAboveHost",
+      "trigger": "overlay turns on (world entered) or F8 return",
+      "behavior": "SetForegroundWindow on Minecraft's window; report success only when GetForegroundWindow is that window",
+      "limit": "Overlay retries every 250 ms for at most 10 s, so Alt+Tab to another app is not fought",
+      "verified": "compiles with Gradle; in-game: needs player test"
+    },
+    {
+      "id": "f8_always_returns",
+      "side": "mc-bridge (Fabric, Minecraft)",
+      "file": "bridge-base/elden-ring/mc-bridge/src/client/java/dev/ermc/bridge/client/Overlay.java:switchToMc",
+      "trigger": "F8 pressed while Elden Ring is foreground (mcSwitchReq bump)",
+      "behavior": "bring Minecraft back and focus it even when it never handed control away (lost focus without F8)",
+      "limit": "none beyond focus_until_foreground",
+      "verified": "compiles with Gradle; in-game: needs player test"
+    }
+  ]
+}
